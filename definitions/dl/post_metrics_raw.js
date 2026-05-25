@@ -26,7 +26,7 @@ SELECT
   social_network_id,
   -- post identity
   post_id,
-  SAFE.PARSE_TIMESTAMP("%Y-%m-%dT%H:%M:%E*SZ", created_at) AS created_at,
+  created_at,
   format,
   copy,
   source_link,
@@ -56,9 +56,9 @@ SELECT
   SAFE_CAST(full_video_watched_rate AS FLOAT64)        AS full_video_watched_rate,
   -- routing
   region,
-  -- audit
-  PARSE_DATE("%Y-%m-%d", dt) AS ingest_date,
-  SAFE.PARSE_TIMESTAMP("%Y-%m-%dT%H:%M:%E*SZ", _ingested_at) AS _ingested_at
+  -- audit (dt comes from hive partitioning typed DATE; _ingested_at typed TIMESTAMP by ext schema)
+  dt AS ingest_date,
+  _ingested_at
 FROM ${ctx.ref({ schema: datasetFor("dp", region), name: "ext_post_metrics" })}
 `
   );

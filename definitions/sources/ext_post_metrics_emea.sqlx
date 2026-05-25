@@ -1,0 +1,7 @@
+config {
+  type: "declaration",
+  database: "visa-reporting",
+  schema: "003_visa_emea_dp",
+  name: "ext_post_metrics_emea",
+  description: "External table 003_visa_emea_dp.ext_post_metrics."
+}

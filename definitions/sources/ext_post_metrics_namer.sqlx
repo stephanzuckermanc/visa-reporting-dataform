@@ -1,0 +1,7 @@
+config {
+  type: "declaration",
+  database: "visa-reporting",
+  schema: "001_visa_namer_dp",
+  name: "ext_post_metrics_namer",
+  description: "External table 001_visa_namer_dp.ext_post_metrics. Per-post Analytics API output."
+}

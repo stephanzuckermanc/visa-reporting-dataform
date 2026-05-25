@@ -1,0 +1,7 @@
+config {
+  type: "declaration",
+  database: "visa-reporting",
+  schema: "001_visa_namer_dp",
+  name: "ext_posts_namer",
+  description: "External table 001_visa_namer_dp.ext_posts. NDJSON in gs://visa-reporting-hootsuite-raw/posts/region=namer/."
+}

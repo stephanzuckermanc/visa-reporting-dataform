@@ -1,0 +1,14 @@
+defaultProject: visa-reporting
+defaultLocation: us-central1
+# defaultDataset is mostly a fallback; per-region models override it via config.schema.
+defaultDataset: 022_visa_latam_dt
+defaultAssertionDataset: visa_assertions
+dataformCoreVersion: 3.0.0
+vars:
+  client: visa
+  # Regions iterated by Dataform forEach loops in dl/, dt/, dm/ models.
+  # Region naming/numbering: namer=1, latam=2, emea=3 (per dataform/includes/country_to_region.js).
+  regions:
+    - namer
+    - latam
+    - emea

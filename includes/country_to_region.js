@@ -9,7 +9,11 @@
 //
 // If a new country shows up, add it here AND in the regions[] config below.
 
-const REGIONS = ["namer", "latam", "emea"];
+// Scope del piloto: solo LATAM. Para reactivar NAMER/EMEA cuando haya
+// profiles conectados de esas regiones, agrega "namer" y/o "emea" aquí
+// y haz push -- los modelos dl/dt/dm los generarán automáticamente porque
+// todo el grafo está hecho con REGIONS.forEach(...).
+const REGIONS = ["latam"];
 
 const REGION_NUMBER = {
   namer: "021",

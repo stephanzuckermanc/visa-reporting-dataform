@@ -4,11 +4,8 @@ defaultLocation: us-central1
 defaultDataset: 022_visa_latam_dt
 defaultAssertionDataset: visa_assertions
 dataformCoreVersion: 3.0.0
-vars:
-  client: visa
-  # Regions iterated by Dataform forEach loops in dl/, dt/, dm/ models.
-  # Region naming/numbering: namer=1, latam=2, emea=3 (per dataform/includes/country_to_region.js).
-  regions:
-    - namer
-    - latam
-    - emea
+# NOTE: Do NOT add `vars` here unless something actually reads them.
+# Dataform Core 3.x restricts `vars` to scalar string -> string mappings. A list
+# value (e.g. `regions: [namer, latam, emea]`) fails compilation with
+# "Array must have size 1, but has size 3". The region list used by the dl/dt/dm
+# forEach loops lives hardcoded in `includes/country_to_region.js::REGIONS`.

@@ -1,0 +1,7 @@
+config {
+  type: "declaration",
+  database: "visa-reporting",
+  schema: "002_visa_latam_dp",
+  name: "ext_post_metrics",
+  description: "External table 002_visa_latam_dp.ext_post_metrics. Per-post Analytics API output, partitioned by GCS prefix region=<r>/dt=<YYYY-MM-DD>/."
+}

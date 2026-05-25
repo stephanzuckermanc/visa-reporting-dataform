@@ -1,7 +1,0 @@
-config {
-  type: "declaration",
-  database: "visa-reporting",
-  schema: "002_visa_latam_dp",
-  name: "ext_posts_latam",
-  description: "External table 002_visa_latam_dp.ext_posts."
-}

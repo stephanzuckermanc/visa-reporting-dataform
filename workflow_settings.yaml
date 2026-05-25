@@ -1,4 +1,8 @@
 defaultProject: visa-reporting
+# defaultLocation MUST match where bootstrap_bq.ps1 created the datasets
+# (and where the GCS bucket lives). All three must agree -- a Dataform job
+# in location X cannot touch a dataset in location Y. We standardized on
+# us-central1 (single region, lower cost than multi-region US).
 defaultLocation: us-central1
 # defaultDataset is mostly a fallback; per-region models override it via config.schema.
 defaultDataset: 022_visa_latam_dt

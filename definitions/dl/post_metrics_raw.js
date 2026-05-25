@@ -59,7 +59,7 @@ SELECT
   -- audit
   PARSE_DATE("%Y-%m-%d", dt) AS ingest_date,
   SAFE.PARSE_TIMESTAMP("%Y-%m-%dT%H:%M:%E*SZ", _ingested_at) AS _ingested_at
-FROM ${ctx.ref(`ext_post_metrics_${region}`)}
+FROM ${ctx.ref({ schema: datasetFor("dp", region), name: "ext_post_metrics" })}
 `
   );
 });

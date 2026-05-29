@@ -1,6 +1,11 @@
-// Data Mart (04X) — dm_post_performance: one row per post with latest metrics + derived rates.
-// Source: 02X_dt.post_metrics (deduped). Takes the most recent snapshot per post.
+// Data Mart (04X) — dm_post_performance: one row per post with latest metrics + last-period deltas + derived rates.
+// Source: 02X_dt.post_metrics. Takes the most recent snapshot per post.
 // Computes derived KPIs (frequency, share_rate, save_rate, vtr_50) inline.
+//
+// Exposes BOTH cumulative columns (reach, views, ...) and last-period deltas
+// (reach_delta, views_delta, ...) so the dashboard can answer:
+//   - "Estado total del post X"      → use cumulative
+//   - "Cuánto ganó esta semana el post X" → use *_delta
 
 const { REGIONS, datasetFor } = require("includes/country_to_region");
 
@@ -10,7 +15,7 @@ REGIONS.forEach((region) => {
   publish("dm_post_performance", {
     schema: datasetFor("dm", region),
     type: "table",
-    description: `Per-post KPIs — ${region.toUpperCase()}. Feeds Top Posts + Brand Performance Summary tiles.`,
+    description: `Per-post KPIs (cumulative + last delta) — ${region.toUpperCase()}.`,
     bigquery: {
       partitionBy: "published_date",
       clusterBy: ["network", "campaign_tag"],
@@ -38,7 +43,7 @@ SELECT
   campaign_tag,
   source_link,
   copy,
-  -- counters
+  -- cumulative counters (state of the post right now)
   reach,
   views,
   video_views,
@@ -53,10 +58,24 @@ SELECT
   exits,
   taps_back,
   taps_forward,
+  -- last-period deltas (what the post gained since the previous snapshot)
+  -- NULL for posts with only one snapshot ever
+  reach_delta,
+  views_delta,
+  video_views_delta,
+  comments_delta,
+  likes_delta,
+  shares_delta,
+  saves_delta,
+  engagement_delta,
+  follows_delta,
+  profile_visits_delta,
+  profile_activity_delta,
+  days_since_prev,
   -- rate / time
   engagement_rate,
   roi,
-  -- derived KPIs
+  -- derived KPIs (over cumulative)
   SAFE_DIVIDE(views, reach)  AS frequency,
   SAFE_DIVIDE(shares, reach) AS share_rate,
   SAFE_DIVIDE(saves, reach)  AS save_rate,

@@ -46,6 +46,9 @@ const COUNTRY_TO_REGION = {
   BR: "latam",
   DO: "latam",
   PR: "latam",
+  JM: "latam",
+  TT: "latam",
+  HT: "latam",
   // EMEA
   ES: "emea",
   GB: "emea",

@@ -1,14 +1,20 @@
 // Data Mart (04X) — dm_platform_summary: aggregates per fact_date × network × country × campaign.
-// Source: 02X_dt.post_metrics (deltas, not cumulatives).
-// Replaces the previous dm_platform_summary_daily, which double-counted because
-// it summed cumulative metrics across time. This version uses *_delta columns
-// from DT, so SUMs across multiple fact_dates are mathematically correct.
+// Source: 02X_dt.post_metrics.
+//
+// SEMANTIC RULE for `*_gained` columns:
+//   * For NON-initial snapshots: use the LAG-based delta (incremental gain
+//     since the previous snapshot of the same post). Pure incremental.
+//   * For INITIAL snapshots: use the cumulative value AS-IS. The first time
+//     we see a post, its entire current state IS what it "gained" since
+//     creation -- there's no prior measurement to subtract.
+//
+// Why include initials: on the first ingest of a 365d backfill, EVERY post
+// is initial -> if we filtered them out, the time series in the dashboard
+// would be empty. Once incremental daily runs accumulate, future snapshots
+// produce real deltas and initials become rare.
 //
 // Cadence-agnostic: works whether the ingest runs daily, weekly, or sporadic.
 // Use `avg_window_days` to detect cadence drift in QA.
-//
-// Initial snapshots (is_initial_snapshot = TRUE) are EXCLUDED — their deltas
-// are NULL and they don't represent activity gained in any specific period.
 
 const { REGIONS, datasetFor } = require("includes/country_to_region");
 
@@ -31,25 +37,27 @@ SELECT
   country,
   region,
   campaign_tag,
-  COUNT(DISTINCT post_id)                                  AS posts,
-  -- incremental sums (no double-counting)
-  SUM(reach_delta)            AS reach_gained,
-  SUM(views_delta)            AS views_gained,
-  SUM(video_views_delta)      AS video_views_gained,
-  SUM(comments_delta)         AS comments_gained,
-  SUM(likes_delta)            AS likes_gained,
-  SUM(shares_delta)           AS shares_gained,
-  SUM(saves_delta)            AS saves_gained,
-  SUM(engagement_delta)       AS engagement_gained,
-  SUM(follows_delta)          AS follows_gained,
-  SUM(profile_visits_delta)   AS profile_visits_gained,
-  SUM(profile_activity_delta) AS profile_activity_gained,
+  COUNT(DISTINCT post_id)                                                AS posts,
+  -- COALESCE(delta, cumulative) so initial snapshots count their full state.
+  SUM(COALESCE(reach_delta,            reach))            AS reach_gained,
+  SUM(COALESCE(views_delta,            views))            AS views_gained,
+  SUM(COALESCE(video_views_delta,      video_views))      AS video_views_gained,
+  SUM(COALESCE(comments_delta,         comments))         AS comments_gained,
+  SUM(COALESCE(likes_delta,            likes))            AS likes_gained,
+  SUM(COALESCE(shares_delta,           shares))           AS shares_gained,
+  SUM(COALESCE(saves_delta,            saves))            AS saves_gained,
+  SUM(COALESCE(engagement_delta,       engagement))       AS engagement_gained,
+  SUM(COALESCE(follows_delta,          follows))          AS follows_gained,
+  SUM(COALESCE(profile_visits_delta,   profile_visits))   AS profile_visits_gained,
+  SUM(COALESCE(profile_activity_delta, profile_activity)) AS profile_activity_gained,
   -- weighted engagement rate over the aggregated window
-  SAFE_DIVIDE(SUM(engagement_delta), SUM(reach_delta)) AS engagement_rate,
+  SAFE_DIVIDE(
+    SUM(COALESCE(engagement_delta, engagement)),
+    SUM(COALESCE(reach_delta,      reach))
+  ) AS engagement_rate,
   -- cadence-quality column: how many days did this period cover, on average?
   AVG(days_since_prev) AS avg_window_days
 FROM ${ctx.ref({ schema: dtDataset, name: "post_metrics" })}
-WHERE is_initial_snapshot = FALSE
 GROUP BY fact_date, network, country, region, campaign_tag
 `
   );

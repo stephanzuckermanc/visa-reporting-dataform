@@ -118,6 +118,9 @@ SELECT
   p.actual_all                                                       AS actual_value,
   t.target_value,
   SAFE_DIVIDE(p.actual_all, t.target_value)                          AS achievement_pct,
+  -- Pre-capped at 1.2 (120%) for the Looker bar chart.
+  -- Using a BQ column avoids Looker SUM-aggregation bugs with calculated fields.
+  LEAST(COALESCE(SAFE_DIVIDE(p.actual_all, t.target_value), 0), 1.2) AS achievement_bar,
   -- Cap trend at ±5 (500%) — values beyond that are backfill artifacts
   -- (prev30 period nearly empty vs last30 full of historical posts).
   -- Will normalize after a few weeks of daily incremental ingests.

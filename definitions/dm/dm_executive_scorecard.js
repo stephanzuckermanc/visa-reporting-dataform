@@ -118,7 +118,14 @@ SELECT
   p.actual_all                                                       AS actual_value,
   t.target_value,
   SAFE_DIVIDE(p.actual_all, t.target_value)                          AS achievement_pct,
-  SAFE_DIVIDE(p.actual_last30 - p.actual_prev30, p.actual_prev30)    AS trend_pct,
+  -- Cap trend at ±5 (500%) — values beyond that are backfill artifacts
+  -- (prev30 period nearly empty vs last30 full of historical posts).
+  -- Will normalize after a few weeks of daily incremental ingests.
+  CASE
+    WHEN ABS(SAFE_DIVIDE(p.actual_last30 - p.actual_prev30, p.actual_prev30)) > 5
+      THEN NULL
+    ELSE SAFE_DIVIDE(p.actual_last30 - p.actual_prev30, p.actual_prev30)
+  END                                                                AS trend_pct,
   t.format_type
 FROM ${ctx.ref({ schema: dmDataset, name: "kpi_targets" })} t
 LEFT JOIN pivoted p USING (metric_id)

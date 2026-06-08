@@ -30,12 +30,16 @@ publish("dm_match_coverage", {
 }).query(
   (ctx) => `
 WITH sheet_rows AS (
-  SELECT market, nombre AS content_name, fecha, link_ig, link_tiktok
+  -- row_id estable para poder deduplicar tras los LEFT JOIN sin colapsar
+  -- filas de plantilla vacías entre sí.
+  SELECT
+    ROW_NUMBER() OVER () AS row_id,
+    market, nombre AS content_name, fecha, link_ig, link_tiktok
   FROM ${ctx.ref({ schema: "002_visa_latam_dp", name: "match_sheet_raw" })}
 ),
 unpivoted AS (
   SELECT
-    market, content_name, fecha,
+    row_id, market, content_name, fecha,
     'instagram' AS platform,
     link_ig     AS link,
     REGEXP_EXTRACT(link_ig, r'instagram\\.com/(?:reel|p|tv)/([^/?]+)') AS ig_shortcode,
@@ -43,33 +47,34 @@ unpivoted AS (
   FROM sheet_rows
   UNION ALL
   SELECT
-    market, content_name, fecha,
+    row_id, market, content_name, fecha,
     'tiktok'     AS platform,
     link_tiktok  AS link,
     CAST(NULL AS STRING)                          AS ig_shortcode,
     REGEXP_EXTRACT(link_tiktok, r'/video/(\\d+)') AS tiktok_id
   FROM sheet_rows
 ),
+-- LEFT JOIN (no subquery correlacionado: BigQuery soporta LIKE en el ON).
+-- Cada JOIN está gateado por plataforma, así solo uno aplica por fila.
+-- QUALIFY dedup por (row_id, platform) si un shortcode matchea varios posts.
 resolved AS (
   SELECT
-    u.*,
-    CASE u.platform
-      WHEN 'instagram' THEN (
-        SELECT p.post_id
-        FROM ${ctx.ref({ schema: dmDataset, name: "dm_post_performance" })} p
-        WHERE u.ig_shortcode IS NOT NULL
-          AND p.source_link LIKE CONCAT('%', u.ig_shortcode, '%')
-        LIMIT 1
-      )
-      WHEN 'tiktok' THEN (
-        SELECT p.post_id
-        FROM ${ctx.ref({ schema: dmDataset, name: "dm_post_performance" })} p
-        WHERE u.tiktok_id IS NOT NULL
-          AND p.post_id = u.tiktok_id
-        LIMIT 1
-      )
-    END AS matched_post_id
+    u.row_id, u.market, u.content_name, u.fecha, u.platform, u.link,
+    u.ig_shortcode, u.tiktok_id,
+    COALESCE(ig.post_id, tk.post_id) AS matched_post_id
   FROM unpivoted u
+  LEFT JOIN ${ctx.ref({ schema: dmDataset, name: "dm_post_performance" })} ig
+    ON u.platform = 'instagram'
+   AND u.ig_shortcode IS NOT NULL
+   AND ig.source_link LIKE CONCAT('%', u.ig_shortcode, '%')
+  LEFT JOIN ${ctx.ref({ schema: dmDataset, name: "dm_post_performance" })} tk
+    ON u.platform = 'tiktok'
+   AND u.tiktok_id IS NOT NULL
+   AND tk.post_id = u.tiktok_id
+  QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY u.row_id, u.platform
+    ORDER BY COALESCE(ig.post_id, tk.post_id)
+  ) = 1
 )
 SELECT
   market,

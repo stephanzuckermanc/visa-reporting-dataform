@@ -3,7 +3,7 @@
 // the business sets new targets (typically quarterly).
 //
 // Format types:
-//   - 'number'  → small decimals (Frequency)
+//   - 'number'  → small decimals (none currently)
 //   - 'compact' → big counters (Reach, Views, Likes, ...) — show as 1.2M / 33K
 //   - 'percent' → ratios stored as 0..1 (Engagement Rate, VTR, ...)
 //
@@ -20,8 +20,7 @@ REGIONS.forEach((region) => {
     description: `Executive scorecard KPI targets (seed) — ${region.toUpperCase()}. 1 row per KPI.`,
   }).query(
     () => `
-SELECT 'frequency'      AS metric_id, 'Reach'      AS section, 'Frequency'             AS metric_label, 1  AS display_order, 1.34       AS target_value, 'number'  AS format_type
-UNION ALL SELECT 'views_2_3s',        'Reach',      'Views (2-3s)',           2,  129121.0,   'compact'
+SELECT 'views_2_3s'     AS metric_id, 'Reach'      AS section, 'Views (2-3s)'          AS metric_label, 2  AS display_order, 129121.0   AS target_value, 'compact' AS format_type
 UNION ALL SELECT 'impressions',       'Reach',      'Impressions',            3,  129121.0,   'compact'
 UNION ALL SELECT 'reach',             'Reach',      'Accounts Reached',       4,  96407.0,    'compact'
 UNION ALL SELECT 'total_comments',    'Recall',     'Total Comments',         5,  397.0,      'compact'

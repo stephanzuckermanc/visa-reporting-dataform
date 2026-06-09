@@ -14,10 +14,12 @@
 //   - IG story (/s/) y TikTok short (/t/): NO matchean (limitación de origen).
 //     Esos quedan reportados en dm_match_coverage, no acá.
 //
-// Salida = MISMAS columnas que dm_post_performance (idéntico al "Post Metrics"
-// de Looker), filtrado a los posts del Sheet. SIN columnas extra: el `nombre`
-// del Sheet se usa solo para identificar/matchear y se descarta (decisión del
-// usuario 2026-06-08). Grain = post_id (un asset puede dar 2 posts: IG y TikTok).
+// Salida = columnas de dm_post_performance (idéntico al "Post Metrics" de Looker)
+// + dos dimensiones del Sheet pedidas por el usuario (2026-06-09):
+//   tipo_contenido (Global/Jugadores/Creadores/Monks) y pauta (Orgánico/Pagado),
+// para poder filtrar/segmentar en Looker. El `nombre` del Sheet sigue SIN
+// proyectarse (solo se usa para matchear). Grain = post_id (un asset puede dar
+// 2 posts: IG y TikTok).
 
 const { datasetFor } = require("includes/country_to_region");
 
@@ -36,19 +38,21 @@ publish("dm_match_content", {
   (ctx) => `
 WITH keys AS (
   SELECT
+    tipo_contenido,
+    pauta,
     REGEXP_EXTRACT(link_ig,     r'instagram\\.com/(?:reel|p|tv)/([^/?]+)') AS ig_shortcode,
     REGEXP_EXTRACT(link_tiktok, r'/video/(\\d+)')                          AS tiktok_id
   FROM ${ctx.ref({ schema: "002_visa_latam_dp", name: "match_sheet_raw" })}
 ),
 matched_ig AS (
-  SELECT p.*
+  SELECT k.tipo_contenido, k.pauta, p.*
   FROM keys k
   JOIN ${ctx.ref({ schema: dmDataset, name: "dm_post_performance" })} p
     ON k.ig_shortcode IS NOT NULL
    AND p.source_link LIKE CONCAT('%', k.ig_shortcode, '%')
 ),
 matched_tk AS (
-  SELECT p.*
+  SELECT k.tipo_contenido, k.pauta, p.*
   FROM keys k
   JOIN ${ctx.ref({ schema: dmDataset, name: "dm_post_performance" })} p
     ON k.tiktok_id IS NOT NULL

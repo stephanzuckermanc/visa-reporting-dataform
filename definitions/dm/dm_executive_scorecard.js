@@ -20,8 +20,8 @@
 //
 // ADDITIVE vs RATIO — the key design decision:
 //   Some KPIs are additive (reach, views, comments, likes, shares+saves): the
-//   Actual = SUM over the filtered dates. Others are ratios (frequency=views/reach,
-//   er=engagement/reach, vtr=avg vtr_50): they must be RECOMPUTED over the filtered
+//   Actual = SUM over the filtered dates. Others are ratios (er=engagement/reach,
+//   vtr=avg vtr_50): they must be RECOMPUTED over the filtered
 //   cohort, never summed. A single Looker column can't do both, so we expose:
 //       num       FLOAT64  -- numerator contribution of that date
 //       den       FLOAT64  -- denominator contribution (0 for additive metrics)
@@ -82,8 +82,7 @@ per_date AS (
 -- One (published_date, network, metric_id, num, den) row per KPI. den = 0 for
 -- additive metrics (Looker never divides them); den = real denominator for ratios.
 metrics_long AS (
-  SELECT published_date, network, 'frequency'   AS metric_id, s_views       AS num, s_reach AS den FROM per_date
-  UNION ALL SELECT published_date, network, 'views_2_3s',     s_video_views,       0.0          FROM per_date
+  SELECT published_date, network, 'views_2_3s'  AS metric_id, s_video_views AS num, 0.0     AS den FROM per_date
   UNION ALL SELECT published_date, network, 'impressions',    s_views,             0.0          FROM per_date
   UNION ALL SELECT published_date, network, 'reach',          s_reach,             0.0          FROM per_date
   UNION ALL SELECT published_date, network, 'total_comments', s_comments,          0.0          FROM per_date
@@ -116,7 +115,6 @@ trend_agg AS (
   SELECT
     period,
     network,
-    SAFE_DIVIDE(SUM(views), SUM(reach))                   AS frequency,
     CAST(SUM(video_views) AS FLOAT64)                     AS views_2_3s,
     CAST(SUM(views)       AS FLOAT64)                     AS impressions,
     CAST(SUM(reach)       AS FLOAT64)                     AS reach,
@@ -135,7 +133,7 @@ trend_long AS (
   SELECT period, network, metric_id, value
   FROM trend_agg
   UNPIVOT INCLUDE NULLS (value FOR metric_id IN (
-    frequency, views_2_3s, impressions, reach, total_comments,
+    views_2_3s, impressions, reach, total_comments,
     vtr, er, shares_saves, total_likes, total_mentions, sov
   ))
 ),
@@ -163,7 +161,7 @@ SELECT
   t.metric_label,
   t.display_order,
   t.format_type,
-  CASE WHEN t.metric_id IN ('frequency', 'vtr', 'er') THEN 1 ELSE 0 END AS is_ratio,
+  CASE WHEN t.metric_id IN ('vtr', 'er') THEN 1 ELSE 0 END AS is_ratio,
   m.num,
   m.den,
   t.target_value,

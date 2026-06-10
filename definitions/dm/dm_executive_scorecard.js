@@ -48,7 +48,7 @@ REGIONS.forEach((region) => {
   publish("dm_executive_scorecard", {
     schema: dmDataset,
     type: "table",
-    description: `Date-filterable executive scorecard — ${region.toUpperCase()}. Grain: metric_id × published_date × network. Actual = SUM(num) (additive) or SUM(num)/SUM(den) (ratio); filter by published_date and/or network in Looker.`,
+    description: `Date-filterable executive scorecard — ${region.toUpperCase()}. Grain: metric_id × published_date × network × market. Actual = SUM(num) (additive) or SUM(num)/SUM(den) (ratio); filter by published_date / network / market in Looker.`,
     bigquery: {
       partitionBy: "published_date",
       clusterBy: ["metric_id", "network"],
@@ -66,6 +66,7 @@ per_date AS (
   SELECT
     published_date,
     network,
+    market,
     CAST(SUM(views)        AS FLOAT64) AS s_views,
     CAST(SUM(reach)        AS FLOAT64) AS s_reach,
     CAST(SUM(video_views)  AS FLOAT64) AS s_video_views,
@@ -77,21 +78,21 @@ per_date AS (
     CAST(SUM(vtr_50)       AS FLOAT64) AS s_vtr,
     CAST(COUNTIF(vtr_50 IS NOT NULL) AS FLOAT64) AS c_vtr
   FROM pp
-  GROUP BY published_date, network
+  GROUP BY published_date, network, market
 ),
--- One (published_date, network, metric_id, num, den) row per KPI. den = 0 for
--- additive metrics (Looker never divides them); den = real denominator for ratios.
+-- One (published_date, network, market, metric_id, num, den) row per KPI. den = 0
+-- for additive metrics (Looker never divides them); den = real denominator for ratios.
 metrics_long AS (
-  SELECT published_date, network, 'views_2_3s'  AS metric_id, s_video_views AS num, 0.0     AS den FROM per_date
-  UNION ALL SELECT published_date, network, 'impressions',    s_views,             0.0          FROM per_date
-  UNION ALL SELECT published_date, network, 'reach',          s_reach,             0.0          FROM per_date
-  UNION ALL SELECT published_date, network, 'total_comments', s_comments,          0.0          FROM per_date
-  UNION ALL SELECT published_date, network, 'vtr',            s_vtr,               c_vtr        FROM per_date
-  UNION ALL SELECT published_date, network, 'er',             s_engagement,        s_reach      FROM per_date
-  UNION ALL SELECT published_date, network, 'shares_saves',   s_shares + s_saves,  0.0          FROM per_date
-  UNION ALL SELECT published_date, network, 'total_likes',    s_likes,             0.0          FROM per_date
-  UNION ALL SELECT published_date, network, 'total_mentions', CAST(NULL AS FLOAT64), 0.0        FROM per_date
-  UNION ALL SELECT published_date, network, 'sov',            CAST(NULL AS FLOAT64), 0.0        FROM per_date
+  SELECT published_date, network, market, 'views_2_3s'  AS metric_id, s_video_views AS num, 0.0 AS den FROM per_date
+  UNION ALL SELECT published_date, network, market, 'impressions',    s_views,             0.0      FROM per_date
+  UNION ALL SELECT published_date, network, market, 'reach',          s_reach,             0.0      FROM per_date
+  UNION ALL SELECT published_date, network, market, 'total_comments', s_comments,          0.0      FROM per_date
+  UNION ALL SELECT published_date, network, market, 'vtr',            s_vtr,               c_vtr    FROM per_date
+  UNION ALL SELECT published_date, network, market, 'er',             s_engagement,        s_reach  FROM per_date
+  UNION ALL SELECT published_date, network, market, 'shares_saves',   s_shares + s_saves,  0.0      FROM per_date
+  UNION ALL SELECT published_date, network, market, 'total_likes',    s_likes,             0.0      FROM per_date
+  UNION ALL SELECT published_date, network, market, 'total_mentions', CAST(NULL AS FLOAT64), 0.0    FROM per_date
+  UNION ALL SELECT published_date, network, market, 'sov',            CAST(NULL AS FLOAT64), 0.0    FROM per_date
 ),
 -- ---- Fixed all-time trend (last 30d vs prev 30d by published_date) ----
 bounds AS (
@@ -115,6 +116,7 @@ trend_agg AS (
   SELECT
     period,
     network,
+    market,
     CAST(SUM(video_views) AS FLOAT64)                     AS views_2_3s,
     CAST(SUM(views)       AS FLOAT64)                     AS impressions,
     CAST(SUM(reach)       AS FLOAT64)                     AS reach,
@@ -127,10 +129,10 @@ trend_agg AS (
     CAST(NULL AS FLOAT64)                                 AS sov
   FROM periods
   WHERE period IS NOT NULL
-  GROUP BY period, network
+  GROUP BY period, network, market
 ),
 trend_long AS (
-  SELECT period, network, metric_id, value
+  SELECT period, network, market, metric_id, value
   FROM trend_agg
   UNPIVOT INCLUDE NULLS (value FOR metric_id IN (
     views_2_3s, impressions, reach, total_comments,
@@ -141,6 +143,7 @@ trend AS (
   SELECT
     metric_id,
     network,
+    market,
     CASE
       WHEN ABS(SAFE_DIVIDE(
              MAX(IF(period='last', value, NULL)) - MAX(IF(period='prev', value, NULL)),
@@ -151,11 +154,12 @@ trend AS (
              MAX(IF(period='prev', value, NULL)))
     END AS trend_pct
   FROM trend_long
-  GROUP BY metric_id, network
+  GROUP BY metric_id, network, market
 )
 SELECT
   m.published_date,
   m.network,
+  m.market,
   t.metric_id,
   t.section,
   t.metric_label,
@@ -168,7 +172,7 @@ SELECT
   tr.trend_pct
 FROM metrics_long m
 JOIN ${ctx.ref({ schema: dmDataset, name: "kpi_targets" })} t USING (metric_id)
-LEFT JOIN trend tr USING (metric_id, network)
+LEFT JOIN trend tr USING (metric_id, network, market)
 `
   );
 });

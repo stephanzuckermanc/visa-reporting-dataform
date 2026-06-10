@@ -16,7 +16,7 @@
 // Cadence-agnostic: works whether the ingest runs daily, weekly, or sporadic.
 // Use `avg_window_days` to detect cadence drift in QA.
 
-const { REGIONS, datasetFor } = require("includes/country_to_region");
+const { REGIONS, datasetFor, marketSQL } = require("includes/country_to_region");
 
 REGIONS.forEach((region) => {
   const dtDataset = datasetFor("dt", region);
@@ -36,6 +36,7 @@ SELECT
   network,
   country,
   region,
+  ${marketSQL("country", "username")} AS market,
   campaign_tag,
   COUNT(DISTINCT post_id)                                                AS posts,
   -- COALESCE(delta, cumulative) so initial snapshots count their full state.
@@ -58,7 +59,7 @@ SELECT
   -- cadence-quality column: how many days did this period cover, on average?
   AVG(days_since_prev) AS avg_window_days
 FROM ${ctx.ref({ schema: dtDataset, name: "post_metrics" })}
-GROUP BY fact_date, network, country, region, campaign_tag
+GROUP BY fact_date, network, country, region, market, campaign_tag
 `
   );
 });

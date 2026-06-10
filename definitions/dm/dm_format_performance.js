@@ -24,6 +24,7 @@ SELECT
   network,
   country,
   region,
+  market,
   format,
   campaign_tag,
   COUNT(*) AS posts,
@@ -39,7 +40,7 @@ SELECT
   SUM(views)       AS total_views,
   SUM(engagement)  AS total_engagement
 FROM ${ctx.ref({ schema: dmDataset, name: "dm_post_performance" })}
-GROUP BY network, country, region, format, campaign_tag
+GROUP BY network, country, region, market, format, campaign_tag
 `
   );
 });

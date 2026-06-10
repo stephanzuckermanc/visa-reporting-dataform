@@ -52,6 +52,7 @@ WITH agg AS (
     published_date,
     network,
     region,
+    COALESCE(market, 'sin_market') AS market,  -- evita NULLs en la key del JOIN del spine
     COUNT(DISTINCT post_id)  AS posts,
     SUM(reach)               AS reach,
     SUM(views)               AS views,
@@ -63,18 +64,20 @@ WITH agg AS (
     SUM(engagement)          AS engagement
   FROM ${ctx.ref({ schema: dmDataset, name: "dm_post_performance" })}
   WHERE published_date IS NOT NULL
-  GROUP BY published_date, network, region
+  GROUP BY published_date, network, region, COALESCE(market, 'sin_market')
 ),
 bounds AS (
   SELECT MIN(published_date) AS min_d, MAX(published_date) AS max_d FROM agg
 ),
+-- (network, region, market) combos que existen -> el spine no inventa
+-- combinaciones imposibles (market es de baja cardinalidad: mexico/carcam/andino/NULL).
 dims AS (
-  SELECT DISTINCT network, region FROM agg
+  SELECT DISTINCT network, region, market FROM agg
 ),
--- date spine × (network, region) so every day has a row per network ->
--- continuous lines even on days that network published nothing.
+-- date spine × dims so every day has a row per combo ->
+-- continuous lines even on days that combo published nothing.
 spine AS (
-  SELECT day AS published_date, dims.network, dims.region
+  SELECT day AS published_date, dims.network, dims.region, dims.market
   FROM bounds,
        UNNEST(GENERATE_DATE_ARRAY(bounds.min_d, bounds.max_d)) AS day
   CROSS JOIN dims
@@ -83,6 +86,7 @@ SELECT
   s.published_date,
   s.network,
   s.region,
+  s.market,
   -- volume counters: 0-filled on empty days (continuous lines)
   COALESCE(a.posts,        0) AS posts,
   COALESCE(a.reach,        0) AS reach,
@@ -98,7 +102,7 @@ SELECT
   SAFE_DIVIDE(a.engagement, a.reach) AS engagement_rate,
   SAFE_DIVIDE(a.views,      a.reach) AS frequency
 FROM spine s
-LEFT JOIN agg a USING (published_date, network, region)
+LEFT JOIN agg a USING (published_date, network, region, market)
 `
   );
 });

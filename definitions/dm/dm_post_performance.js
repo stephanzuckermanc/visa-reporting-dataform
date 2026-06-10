@@ -7,7 +7,7 @@
 //   - "Estado total del post X"      → use cumulative
 //   - "Cuánto ganó esta semana el post X" → use *_delta
 
-const { REGIONS, datasetFor } = require("includes/country_to_region");
+const { REGIONS, datasetFor, marketSQL } = require("includes/country_to_region");
 
 REGIONS.forEach((region) => {
   const dtDataset = datasetFor("dt", region);
@@ -37,6 +37,7 @@ SELECT
   network,
   country,
   region,
+  ${marketSQL("country", "username")} AS market,
   created_at AS published_at,
   published_date,
   format,

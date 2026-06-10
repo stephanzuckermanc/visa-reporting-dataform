@@ -92,6 +92,43 @@ function countryToRegionSQL(countryCol = "country") {
   return `CASE\n${cases}\n    ELSE NULL\n  END`;
 }
 
+// Sub-región comercial dentro de LATAM (los 3 "markets" del Mundial: Mexico /
+// CarCam / Andino). Es el mismo agrupamiento de las tabs del Sheet del Mundial y
+// del KPI sheet por región. Se deriva del `country` del post. Países aún no
+// conectados quedan previstos para que entren solos al conectarse.
+const COUNTRY_TO_MARKET = {
+  // Mexico
+  MX: "mexico",
+  // Andino
+  CO: "andino", EC: "andino", PE: "andino", VE: "andino", BO: "andino",
+  // CarCam (Centroamérica + Caribe)
+  CR: "carcam", DO: "carcam", GT: "carcam", JM: "carcam", PA: "carcam",
+  PR: "carcam", SV: "carcam", HN: "carcam", NI: "carcam", TT: "carcam", HT: "carcam",
+};
+
+// Overrides por username para perfiles SIN country (multi-país / regionales).
+// La página FB del Caribe es claramente CarCam aunque su country venga NULL.
+const USERNAME_TO_MARKET = {
+  "Visa (TT, JM, HT, ...)": "carcam",
+};
+
+/**
+ * Returns SQL that maps (country, username) to a LATAM market string
+ * (mexico | carcam | andino), or NULL. The username override wins (handles
+ * the multi-country Caribbean FB page whose country is NULL); otherwise maps
+ * by country. Profiles like "Visa Español" / the null Twitter -> NULL.
+ *   Use:  ${marketSQL("country", "username")}  →  CASE ... END
+ */
+function marketSQL(countryCol = "country", usernameCol = "username") {
+  const userCases = Object.entries(USERNAME_TO_MARKET)
+    .map(([u, m]) => `    WHEN ${usernameCol} = '${u.replace(/'/g, "\\'")}' THEN '${m}'`)
+    .join("\n");
+  const countryCases = Object.entries(COUNTRY_TO_MARKET)
+    .map(([cc, m]) => `    WHEN UPPER(${countryCol}) = '${cc}' THEN '${m}'`)
+    .join("\n");
+  return `CASE\n${userCases}\n${countryCases}\n    ELSE NULL\n  END`;
+}
+
 /**
  * Dataset name for a layer × region.
  * Examples:
@@ -118,6 +155,9 @@ module.exports = {
   REGIONS,
   REGION_NUMBER,
   COUNTRY_TO_REGION,
+  COUNTRY_TO_MARKET,
+  USERNAME_TO_MARKET,
   countryToRegionSQL,
+  marketSQL,
   datasetFor,
 };

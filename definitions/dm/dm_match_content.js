@@ -39,20 +39,24 @@ publish("dm_match_content", {
 WITH keys AS (
   SELECT
     tipo_contenido,
-    pauta,
+    pauta_ig,
+    pauta_tiktok,
     REGEXP_EXTRACT(link_ig,     r'instagram\\.com/(?:reel|p|tv)/([^/?]+)') AS ig_shortcode,
     REGEXP_EXTRACT(link_tiktok, r'/video/(\\d+)')                          AS tiktok_id
   FROM ${ctx.ref({ schema: "002_visa_latam_dp", name: "match_sheet_raw" })}
 ),
+-- pauta ahora viene partida por plataforma en el Sheet: el post de IG lleva
+-- pauta_ig y el de TikTok pauta_tiktok, ambos proyectados a la MISMA columna de
+-- salida pauta (Looker no cambia, pero el valor ya es correcto por red).
 matched_ig AS (
-  SELECT k.tipo_contenido, k.pauta, p.*
+  SELECT k.tipo_contenido, k.pauta_ig AS pauta, p.*
   FROM keys k
   JOIN ${ctx.ref({ schema: dmDataset, name: "dm_post_performance" })} p
     ON k.ig_shortcode IS NOT NULL
    AND p.source_link LIKE CONCAT('%', k.ig_shortcode, '%')
 ),
 matched_tk AS (
-  SELECT k.tipo_contenido, k.pauta, p.*
+  SELECT k.tipo_contenido, k.pauta_tiktok AS pauta, p.*
   FROM keys k
   JOIN ${ctx.ref({ schema: dmDataset, name: "dm_post_performance" })} p
     ON k.tiktok_id IS NOT NULL

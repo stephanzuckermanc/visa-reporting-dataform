@@ -12,7 +12,10 @@
 //     -> 002_visa_latam_dp.match_sheet_raw      (native -- declared here)
 //     -> dm_match_content / dm_match_coverage
 //
-// Columns: market, fecha, nombre, link_ig, link_tiktok, autor, copy_out (all STRING).
+// Columns (all STRING): market, fecha, nombre, link_ig, link_tiktok, autor,
+// copy_out, tipo_contenido, pauta_ig, pauta_tiktok.
+// (Los tabs por mercado traen 9 cols A:I. La pauta viene partida por plataforma:
+//  pauta_ig = col H "Pauta? Instagram", pauta_tiktok = col I "Pauta TikTok?".)
 
 declare({
   database: "visa-reporting",

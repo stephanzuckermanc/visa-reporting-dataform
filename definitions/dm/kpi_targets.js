@@ -11,8 +11,9 @@
 //   - market 'total' = la fila TOTAL del sheet tal cual.
 //   ⚠️ PLACEHOLDER: el breakdown por país del sheet no reconcilia con el TOTAL
 //      en Likes/Share/Saves (data dummy por país). Se refleja lo que el sheet diga.
-//   - total_mentions / sov = Brandwatch (no están en el sheet): NULL por market,
-//     valor en 'total'.
+//   - Brandwatch (mentions, sov competidores/sponsors, positive sentiment) y los
+//     promedios/rates (ave_impressions/ave_views/shares_rate/saves_rate) NO son
+//     columnas del sheet: se definen en el bloque `manual` (target del plan FIFA).
 //
 // Formato: números con coma y '%' se limpian acá. vtr/er = valor del sheet / 100.
 
@@ -49,7 +50,7 @@ markets AS (
   SELECT
     market,
     SUM(reach) AS reach, SUM(views_platform) AS views_platform, SUM(impressions) AS impressions,
-    SUM(comments) AS comments, SUM(likes) AS likes, SUM(share) + SUM(saves) AS shares_saves,
+    SUM(comments) AS comments, SUM(likes) AS likes, SUM(share) AS shares, SUM(saves) AS saves,
     AVG(vtr) AS vtr, AVG(er) AS er
   FROM clean
   WHERE market IN ('mexico', 'carcam', 'andino')
@@ -57,7 +58,7 @@ markets AS (
 ),
 total AS (
   SELECT 'total' AS market, reach, views_platform, impressions, comments, likes,
-         share + saves AS shares_saves, vtr, er
+         share AS shares, saves AS saves, vtr, er
   FROM clean
   WHERE market = 'total'
 ),
@@ -69,18 +70,25 @@ wide AS (
 long AS (
   SELECT market, metric_col, val
   FROM wide
-  UNPIVOT(val FOR metric_col IN (reach, views_platform, impressions, comments, likes, shares_saves, vtr, er))
+  UNPIVOT(val FOR metric_col IN (reach, views_platform, impressions, comments, likes, shares, saves, vtr, er))
 ),
+-- Orden/secciones alineados al plan FIFA "Social Organic KPIs":
+--   Reach: Reach(1) Views(2) Impressions(3) Ave.Impressions(4) Ave.Views(5)
+--   Recall: VTR(6) Comments(7)
+--   Engagement: SOV competidores(8) ER(9) Mentions(10) Likes(11)
+--               Shares(12) SharesRate(13) Saves(14) SavesRate(15)
+--               Positive Sentiment(16) SOV sponsors(17)
 meta AS (
   SELECT * FROM UNNEST([
-    STRUCT('reach'          AS metric_col, 'reach'          AS metric_id, 'Reach'      AS section, 'Accounts Reached'      AS metric_label, 4  AS display_order, 'compact' AS format_type),
+    STRUCT('reach'          AS metric_col, 'reach'          AS metric_id, 'Reach'      AS section, 'Accounts Reached'      AS metric_label, 1  AS display_order, 'compact' AS format_type),
     STRUCT('views_platform', 'views_2_3s',     'Reach',      'Views (2-3s)',          2,  'compact'),
     STRUCT('impressions',    'impressions',    'Reach',      'Impressions',           3,  'compact'),
-    STRUCT('comments',       'total_comments', 'Recall',     'Total Comments',        5,  'compact'),
+    STRUCT('comments',       'total_comments', 'Recall',     'Total Comments',        7,  'compact'),
     STRUCT('vtr',            'vtr',            'Recall',     'View Through Rate (%)', 6,  'percent'),
-    STRUCT('er',             'er',             'Engagement', 'Engagement Rate (%)',   7,  'percent'),
-    STRUCT('shares_saves',   'shares_saves',   'Engagement', 'Shares & Saves',        8,  'compact'),
-    STRUCT('likes',          'total_likes',    'Engagement', 'Total Likes',           9,  'compact')
+    STRUCT('er',             'er',             'Engagement', 'Engagement Rate (%)',   9,  'percent'),
+    STRUCT('shares',         'shares',         'Engagement', 'Shares',                12, 'compact'),
+    STRUCT('saves',          'saves',          'Engagement', 'Saves',                 14, 'compact'),
+    STRUCT('likes',          'total_likes',    'Engagement', 'Total Likes',           11, 'compact')
   ])
 ),
 sheet_targets AS (
@@ -88,22 +96,41 @@ sheet_targets AS (
   FROM long l
   JOIN meta m USING (metric_col)
 ),
--- Brandwatch (no están en el sheet): total_mentions / sov.
-brandwatch AS (
+-- Targets que NO vienen como columna del sheet: promedios y rates (Hootsuite,
+-- con actual por market pero target solo total del plan) + Brandwatch (solo total).
+-- Para las de Hootsuite emito las 3 filas de market con target NULL (para que la
+-- métrica siga visible al filtrar por mercado) + la fila total con el valor del plan.
+-- Las de Brandwatch solo existen en 'total' (no se parten por mercado).
+manual AS (
   SELECT * FROM UNNEST([
-    STRUCT('total_mentions' AS metric_id, 'mexico' AS market, 'Engagement' AS section, 'Total Mentions' AS metric_label, 10 AS display_order, CAST(NULL AS FLOAT64) AS target_value, 'compact' AS format_type),
-    STRUCT('total_mentions', 'carcam', 'Engagement', 'Total Mentions',     10, CAST(NULL AS FLOAT64), 'compact'),
-    STRUCT('total_mentions', 'andino', 'Engagement', 'Total Mentions',     10, CAST(NULL AS FLOAT64), 'compact'),
-    STRUCT('total_mentions', 'total',  'Engagement', 'Total Mentions',     10, 126500.0,              'compact'),
-    STRUCT('sov',            'mexico', 'Engagement', 'Share of Voice (%)', 11, CAST(NULL AS FLOAT64), 'percent'),
-    STRUCT('sov',            'carcam', 'Engagement', 'Share of Voice (%)', 11, CAST(NULL AS FLOAT64), 'percent'),
-    STRUCT('sov',            'andino', 'Engagement', 'Share of Voice (%)', 11, CAST(NULL AS FLOAT64), 'percent'),
-    STRUCT('sov',            'total',  'Engagement', 'Share of Voice (%)', 11, 0.22,                  'percent')
+    -- Reach (diagnóstico): promedios por post. target total del plan = 1,484.
+    STRUCT('ave_impressions' AS metric_id, 'mexico' AS market, 'Reach' AS section, 'Ave. Impressions' AS metric_label, 4 AS display_order, CAST(NULL AS FLOAT64) AS target_value, 'compact' AS format_type),
+    STRUCT('ave_impressions', 'carcam', 'Reach', 'Ave. Impressions', 4, CAST(NULL AS FLOAT64), 'compact'),
+    STRUCT('ave_impressions', 'andino', 'Reach', 'Ave. Impressions', 4, CAST(NULL AS FLOAT64), 'compact'),
+    STRUCT('ave_impressions', 'total',  'Reach', 'Ave. Impressions', 4, 1484.0,                'compact'),
+    STRUCT('ave_views',       'mexico', 'Reach', 'Ave. Views',       5, CAST(NULL AS FLOAT64), 'compact'),
+    STRUCT('ave_views',       'carcam', 'Reach', 'Ave. Views',       5, CAST(NULL AS FLOAT64), 'compact'),
+    STRUCT('ave_views',       'andino', 'Reach', 'Ave. Views',       5, CAST(NULL AS FLOAT64), 'compact'),
+    STRUCT('ave_views',       'total',  'Reach', 'Ave. Views',       5, 1484.0,                'compact'),
+    -- Engagement: rates (denominador = reach). target total del plan.
+    STRUCT('shares_rate', 'mexico', 'Engagement', 'Shares Rate (%)', 13, CAST(NULL AS FLOAT64), 'percent'),
+    STRUCT('shares_rate', 'carcam', 'Engagement', 'Shares Rate (%)', 13, CAST(NULL AS FLOAT64), 'percent'),
+    STRUCT('shares_rate', 'andino', 'Engagement', 'Shares Rate (%)', 13, CAST(NULL AS FLOAT64), 'percent'),
+    STRUCT('shares_rate', 'total',  'Engagement', 'Shares Rate (%)', 13, 0.0087,                'percent'),
+    STRUCT('saves_rate',  'mexico', 'Engagement', 'Saves Rate (%)',  15, CAST(NULL AS FLOAT64), 'percent'),
+    STRUCT('saves_rate',  'carcam', 'Engagement', 'Saves Rate (%)',  15, CAST(NULL AS FLOAT64), 'percent'),
+    STRUCT('saves_rate',  'andino', 'Engagement', 'Saves Rate (%)',  15, CAST(NULL AS FLOAT64), 'percent'),
+    STRUCT('saves_rate',  'total',  'Engagement', 'Saves Rate (%)',  15, 0.0064,                'percent'),
+    -- Brandwatch (solo total): Mentions, los 2 SOV y Positive Sentiment.
+    STRUCT('total_mentions',     'total', 'Engagement', 'Total Mentions',          10, 86938.0, 'compact'),
+    STRUCT('sov',                'total', 'Engagement', 'SOV vs Competidores (%)', 8,  0.041,   'percent'),
+    STRUCT('positive_sentiment', 'total', 'Engagement', 'Positive Sentiment (%)',  16, 0.25,    'percent'),
+    STRUCT('sov_sponsors',       'total', 'Engagement', 'SOV entre Sponsors (%)',  17, 0.034,   'percent')
   ])
 )
 SELECT * FROM sheet_targets
 UNION ALL
-SELECT * FROM brandwatch
+SELECT * FROM manual
 `
   );
 });

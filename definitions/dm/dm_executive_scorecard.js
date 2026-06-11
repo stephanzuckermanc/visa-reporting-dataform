@@ -74,7 +74,7 @@ per_date AS (
     published_date,
     network,
     IF(is_rollup = 1, 'total', market) AS market,
-    s_views, s_reach, s_video_views, s_comments, s_likes, s_shares, s_saves, s_engagement, s_vtr, c_vtr
+    s_views, s_reach, s_video_views, s_comments, s_likes, s_shares, s_saves, s_engagement, s_vtr, c_vtr, c_posts
   FROM (
     SELECT
       published_date,
@@ -90,7 +90,8 @@ per_date AS (
       CAST(SUM(saves)        AS FLOAT64) AS s_saves,
       CAST(SUM(engagement)   AS FLOAT64) AS s_engagement,
       CAST(SUM(vtr_50)       AS FLOAT64) AS s_vtr,
-      CAST(COUNTIF(vtr_50 IS NOT NULL) AS FLOAT64) AS c_vtr
+      CAST(COUNTIF(vtr_50 IS NOT NULL) AS FLOAT64) AS c_vtr,
+      CAST(COUNT(*)          AS FLOAT64) AS c_posts
     FROM pp
     GROUP BY GROUPING SETS (
       (published_date, network, market),
@@ -102,15 +103,53 @@ per_date AS (
 -- for additive metrics (Looker never divides them); den = real denominator for ratios.
 metrics_long AS (
   SELECT published_date, network, market, 'views_2_3s'  AS metric_id, s_video_views AS num, 0.0 AS den FROM per_date
-  UNION ALL SELECT published_date, network, market, 'impressions',    s_views,             0.0      FROM per_date
-  UNION ALL SELECT published_date, network, market, 'reach',          s_reach,             0.0      FROM per_date
-  UNION ALL SELECT published_date, network, market, 'total_comments', s_comments,          0.0      FROM per_date
-  UNION ALL SELECT published_date, network, market, 'vtr',            s_vtr,               c_vtr    FROM per_date
-  UNION ALL SELECT published_date, network, market, 'er',             s_engagement,        s_reach  FROM per_date
-  UNION ALL SELECT published_date, network, market, 'shares_saves',   s_shares + s_saves,  0.0      FROM per_date
-  UNION ALL SELECT published_date, network, market, 'total_likes',    s_likes,             0.0      FROM per_date
-  UNION ALL SELECT published_date, network, market, 'total_mentions', CAST(NULL AS FLOAT64), 0.0    FROM per_date
-  UNION ALL SELECT published_date, network, market, 'sov',            CAST(NULL AS FLOAT64), 0.0    FROM per_date
+  UNION ALL SELECT published_date, network, market, 'impressions',     s_views,             0.0      FROM per_date
+  UNION ALL SELECT published_date, network, market, 'reach',           s_reach,             0.0      FROM per_date
+  -- promedios por post: Actual = SUM(num)/SUM(c_posts) -> son ratios (is_ratio=1).
+  UNION ALL SELECT published_date, network, market, 'ave_impressions', s_views,             c_posts  FROM per_date
+  UNION ALL SELECT published_date, network, market, 'ave_views',       s_video_views,       c_posts  FROM per_date
+  UNION ALL SELECT published_date, network, market, 'total_comments',  s_comments,          0.0      FROM per_date
+  UNION ALL SELECT published_date, network, market, 'vtr',             s_vtr,               c_vtr    FROM per_date
+  UNION ALL SELECT published_date, network, market, 'er',              s_engagement,        s_reach  FROM per_date
+  -- shares/saves separados (absoluto) + sus rates (denominador = reach).
+  UNION ALL SELECT published_date, network, market, 'shares',          s_shares,            0.0      FROM per_date
+  UNION ALL SELECT published_date, network, market, 'shares_rate',     s_shares,            s_reach  FROM per_date
+  UNION ALL SELECT published_date, network, market, 'saves',           s_saves,             0.0      FROM per_date
+  UNION ALL SELECT published_date, network, market, 'saves_rate',      s_saves,             s_reach  FROM per_date
+  UNION ALL SELECT published_date, network, market, 'total_likes',     s_likes,             0.0      FROM per_date
+),
+-- ---- Brandwatch al scorecard (grain = fecha, sin network/market) ----
+-- Mentions, los 2 SOV y Positive Sentiment son métricas de MARCA: no se parten
+-- por red ni mercado. Se emiten en market='total' y network=NULL, con
+-- published_date = fecha para que el control de fecha de Looker las filtre. Al
+-- filtrar por un mercado o red concretos, quedan en blanco (es correcto: no se
+-- pueden atribuir a IG-solo ni a un país).
+bw_daily AS (
+  SELECT fecha, total_mentions, men_pos, sentiment_total
+  FROM ${ctx.ref({ schema: dmDataset, name: "dm_listening" })}
+),
+bw_sov AS (
+  SELECT
+    fecha,
+    SUM(IF(scope = 'competitor' AND brand_key = 'visa', mentions, 0)) AS visa_comp,
+    SUM(IF(scope = 'competitor',                         mentions, 0)) AS tot_comp,
+    SUM(IF(scope = 'sponsor'    AND brand_key = 'visa', mentions, 0)) AS visa_spon,
+    SUM(IF(scope = 'sponsor',                            mentions, 0)) AS tot_spon
+  FROM ${ctx.ref({ schema: dmDataset, name: "dm_sov" })}
+  GROUP BY fecha
+),
+brandwatch_long AS (
+  SELECT fecha AS published_date, CAST(NULL AS STRING) AS network, 'total' AS market,
+         'total_mentions' AS metric_id, CAST(total_mentions AS FLOAT64) AS num, 0.0 AS den
+  FROM bw_daily
+  UNION ALL SELECT fecha, NULL, 'total', 'positive_sentiment', CAST(men_pos AS FLOAT64), CAST(sentiment_total AS FLOAT64) FROM bw_daily
+  UNION ALL SELECT fecha, NULL, 'total', 'sov',          CAST(visa_comp AS FLOAT64), CAST(tot_comp AS FLOAT64) FROM bw_sov
+  UNION ALL SELECT fecha, NULL, 'total', 'sov_sponsors', CAST(visa_spon AS FLOAT64), CAST(tot_spon AS FLOAT64) FROM bw_sov
+),
+metrics_all AS (
+  SELECT published_date, network, market, metric_id, num, den FROM metrics_long
+  UNION ALL
+  SELECT published_date, network, market, metric_id, num, den FROM brandwatch_long
 ),
 -- ---- Fixed all-time trend (last 30d vs prev 30d by published_date) ----
 bounds AS (
@@ -183,12 +222,15 @@ SELECT
   t.metric_label,
   t.display_order,
   t.format_type,
-  CASE WHEN t.metric_id IN ('vtr', 'er') THEN 1 ELSE 0 END AS is_ratio,
+  CASE WHEN t.metric_id IN (
+    'vtr', 'er', 'ave_impressions', 'ave_views',
+    'shares_rate', 'saves_rate', 'sov', 'sov_sponsors', 'positive_sentiment'
+  ) THEN 1 ELSE 0 END AS is_ratio,
   m.num,
   m.den,
   t.target_value,
   tr.trend_pct
-FROM metrics_long m
+FROM metrics_all m
 JOIN ${ctx.ref({ schema: dmDataset, name: "kpi_targets" })} t USING (metric_id, market)
 LEFT JOIN trend tr USING (metric_id, network, market)
 `

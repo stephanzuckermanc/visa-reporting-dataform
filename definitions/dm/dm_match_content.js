@@ -25,15 +25,17 @@ const { datasetFor } = require("includes/country_to_region");
 
 const dmDataset = datasetFor("dm", "latam"); // 042_visa_latam_dm
 
+// VISTA (no tabla): el CM edita el Sheet muchas veces al día. Como vista,
+// refleja match_sheet_raw (refrescado cada 15 min por la scheduled query) al
+// instante, SIN necesidad de correr Dataform. Es chica (solo contenido Mundial)
+// así que recalcular el join contra dm_post_performance en cada consulta es
+// trivial. Los KPIs siguen el ritmo del ingest; la membresía/labels del Sheet
+// se ven en ≤15 min.
 publish("dm_match_content", {
   schema: dmDataset,
-  type: "table",
+  type: "view",
   description:
-    "Posts del Sheet CM (contenido Mundial FIFA 26) matcheados contra dm_post_performance. Mismas columnas que dm_post_performance, filtrado a los posts del Sheet. Grain = post_id.",
-  bigquery: {
-    partitionBy: "published_date",
-    clusterBy: ["network"],
-  },
+    "Posts del Sheet CM (contenido Mundial FIFA 26) matcheados contra dm_post_performance. Mismas columnas que dm_post_performance, filtrado a los posts del Sheet. Grain = post_id. VISTA: refleja el Sheet en vivo.",
 }).query(
   (ctx) => `
 WITH keys AS (

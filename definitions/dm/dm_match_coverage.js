@@ -19,14 +19,13 @@ const { datasetFor } = require("includes/country_to_region");
 
 const dmDataset = datasetFor("dm", "latam"); // 042_visa_latam_dm
 
+// VISTA (no tabla): igual que dm_match_content, refleja el Sheet en vivo
+// (match_sheet_raw cada 15 min) sin correr Dataform. Tabla chica.
 publish("dm_match_coverage", {
   schema: dmDataset,
-  type: "table",
+  type: "view",
   description:
-    "Cobertura QA del Sheet CM: una fila por (fila del Sheet × plataforma con link) con match_status + reason. Contraparte de dm_match_content.",
-  bigquery: {
-    clusterBy: ["market", "match_status"],
-  },
+    "Cobertura QA del Sheet CM: una fila por (fila del Sheet × plataforma con link) con match_status + reason. Contraparte de dm_match_content. VISTA: refleja el Sheet en vivo.",
 }).query(
   (ctx) => `
 WITH sheet_rows AS (

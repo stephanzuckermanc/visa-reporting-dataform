@@ -62,23 +62,41 @@ WITH pp AS (
 ),
 -- Per-publish-date sums of the latest snapshot of each post (FLOAT64 so the
 -- UNION ALL below keeps one consistent num/den type).
+-- GROUPING SETS emite dos niveles por (published_date, network):
+--   1) por market real (mexico/carcam/andino/NULL=sin-market)
+--   2) un rollup 'total' (todos los markets juntos, incluye sin-market)
+-- Así el scorecard se compara contra el target por market O contra el total.
 per_date AS (
+  -- el subquery hace el GROUPING SETS crudo (market + flag is_rollup); el SELECT
+  -- externo arma el label 'total' para las filas de rollup. (Hacerlo en un solo
+  -- nivel choca: el alias market con IF(GROUPING(...)) colisiona en el GROUP BY.)
   SELECT
     published_date,
     network,
-    market,
-    CAST(SUM(views)        AS FLOAT64) AS s_views,
-    CAST(SUM(reach)        AS FLOAT64) AS s_reach,
-    CAST(SUM(video_views)  AS FLOAT64) AS s_video_views,
-    CAST(SUM(comments)     AS FLOAT64) AS s_comments,
-    CAST(SUM(likes)        AS FLOAT64) AS s_likes,
-    CAST(SUM(shares)       AS FLOAT64) AS s_shares,
-    CAST(SUM(saves)        AS FLOAT64) AS s_saves,
-    CAST(SUM(engagement)   AS FLOAT64) AS s_engagement,
-    CAST(SUM(vtr_50)       AS FLOAT64) AS s_vtr,
-    CAST(COUNTIF(vtr_50 IS NOT NULL) AS FLOAT64) AS c_vtr
-  FROM pp
-  GROUP BY published_date, network, market
+    IF(is_rollup = 1, 'total', market) AS market,
+    s_views, s_reach, s_video_views, s_comments, s_likes, s_shares, s_saves, s_engagement, s_vtr, c_vtr
+  FROM (
+    SELECT
+      published_date,
+      network,
+      market,
+      GROUPING(market) AS is_rollup,
+      CAST(SUM(views)        AS FLOAT64) AS s_views,
+      CAST(SUM(reach)        AS FLOAT64) AS s_reach,
+      CAST(SUM(video_views)  AS FLOAT64) AS s_video_views,
+      CAST(SUM(comments)     AS FLOAT64) AS s_comments,
+      CAST(SUM(likes)        AS FLOAT64) AS s_likes,
+      CAST(SUM(shares)       AS FLOAT64) AS s_shares,
+      CAST(SUM(saves)        AS FLOAT64) AS s_saves,
+      CAST(SUM(engagement)   AS FLOAT64) AS s_engagement,
+      CAST(SUM(vtr_50)       AS FLOAT64) AS s_vtr,
+      CAST(COUNTIF(vtr_50 IS NOT NULL) AS FLOAT64) AS c_vtr
+    FROM pp
+    GROUP BY GROUPING SETS (
+      (published_date, network, market),
+      (published_date, network)
+    )
+  )
 ),
 -- One (published_date, network, market, metric_id, num, den) row per KPI. den = 0
 -- for additive metrics (Looker never divides them); den = real denominator for ratios.
@@ -171,7 +189,7 @@ SELECT
   t.target_value,
   tr.trend_pct
 FROM metrics_long m
-JOIN ${ctx.ref({ schema: dmDataset, name: "kpi_targets" })} t USING (metric_id)
+JOIN ${ctx.ref({ schema: dmDataset, name: "kpi_targets" })} t USING (metric_id, market)
 LEFT JOIN trend tr USING (metric_id, network, market)
 `
   );

@@ -40,6 +40,7 @@ SELECT
   ${marketSQL("country", "username")} AS market,
   created_at AS published_at,
   published_date,
+  fact_date,
   format,
   campaign_tag,
   source_link,

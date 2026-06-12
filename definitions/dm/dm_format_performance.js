@@ -25,6 +25,8 @@ SELECT
   country,
   region,
   market,
+  -- Fuente = dm_match_content (Mundial). pauta del Sheet normalizada a organic/paid.
+  CASE pauta WHEN 'Orgánico' THEN 'organic' WHEN 'Pagado' THEN 'paid' ELSE 'organic' END AS pauta,
   format,
   campaign_tag,
   COUNT(*) AS posts,
@@ -39,8 +41,10 @@ SELECT
   SUM(reach)       AS total_reach,
   SUM(views)       AS total_views,
   SUM(engagement)  AS total_engagement
-FROM ${ctx.ref({ schema: dmDataset, name: "dm_post_performance" })}
-GROUP BY network, country, region, market, format, campaign_tag
+FROM ${ctx.ref({ schema: dmDataset, name: "dm_match_content" })}
+GROUP BY network, country, region, market,
+         CASE pauta WHEN 'Orgánico' THEN 'organic' WHEN 'Pagado' THEN 'paid' ELSE 'organic' END,
+         format, campaign_tag
 `
   );
 });

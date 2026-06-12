@@ -40,19 +40,21 @@ REGIONS.forEach((region) => {
   publish("dm_content_timeseries", {
     schema: dmDataset,
     type: "table",
-    description: `Daily content-calendar time series by published_date (date-spine filled) — ${region.toUpperCase()}. Source for all "... over time" charts.`,
+    description: `Daily content-calendar time series by published_date (Mundial-only, desde dm_match_content; date-spine filled) — ${region.toUpperCase()}. Source for all "... over time" charts. Grain incl. pauta (organic/paid).`,
     bigquery: {
       partitionBy: "published_date",
-      clusterBy: ["network"],
+      clusterBy: ["network", "market", "pauta"],
     },
   }).query(
     (ctx) => `
 WITH agg AS (
+  -- Fuente = dm_match_content (Mundial). pauta del Sheet normalizada a organic/paid.
   SELECT
     published_date,
     network,
     region,
     COALESCE(market, 'sin_market') AS market,  -- evita NULLs en la key del JOIN del spine
+    CASE pauta WHEN 'Orgánico' THEN 'organic' WHEN 'Pagado' THEN 'paid' ELSE 'organic' END AS pauta,
     COUNT(DISTINCT post_id)  AS posts,
     SUM(reach)               AS reach,
     SUM(views)               AS views,
@@ -62,9 +64,10 @@ WITH agg AS (
     SUM(shares)              AS shares,
     SUM(saves)               AS saves,
     SUM(engagement)          AS engagement
-  FROM ${ctx.ref({ schema: dmDataset, name: "dm_post_performance" })}
+  FROM ${ctx.ref({ schema: dmDataset, name: "dm_match_content" })}
   WHERE published_date IS NOT NULL
-  GROUP BY published_date, network, region, COALESCE(market, 'sin_market')
+  GROUP BY published_date, network, region, COALESCE(market, 'sin_market'),
+           CASE pauta WHEN 'Orgánico' THEN 'organic' WHEN 'Pagado' THEN 'paid' ELSE 'organic' END
 ),
 bounds AS (
   SELECT MIN(published_date) AS min_d, MAX(published_date) AS max_d FROM agg
@@ -72,12 +75,12 @@ bounds AS (
 -- (network, region, market) combos que existen -> el spine no inventa
 -- combinaciones imposibles (market es de baja cardinalidad: mexico/carcam/andino/NULL).
 dims AS (
-  SELECT DISTINCT network, region, market FROM agg
+  SELECT DISTINCT network, region, market, pauta FROM agg
 ),
 -- date spine × dims so every day has a row per combo ->
 -- continuous lines even on days that combo published nothing.
 spine AS (
-  SELECT day AS published_date, dims.network, dims.region, dims.market
+  SELECT day AS published_date, dims.network, dims.region, dims.market, dims.pauta
   FROM bounds,
        UNNEST(GENERATE_DATE_ARRAY(bounds.min_d, bounds.max_d)) AS day
   CROSS JOIN dims
@@ -87,6 +90,7 @@ SELECT
   s.network,
   s.region,
   s.market,
+  s.pauta,
   -- volume counters: 0-filled on empty days (continuous lines)
   COALESCE(a.posts,        0) AS posts,
   COALESCE(a.reach,        0) AS reach,
@@ -102,7 +106,7 @@ SELECT
   SAFE_DIVIDE(a.engagement, a.reach) AS engagement_rate,
   SAFE_DIVIDE(a.views,      a.reach) AS frequency
 FROM spine s
-LEFT JOIN agg a USING (published_date, network, region, market)
+LEFT JOIN agg a USING (published_date, network, region, market, pauta)
 `
   );
 });

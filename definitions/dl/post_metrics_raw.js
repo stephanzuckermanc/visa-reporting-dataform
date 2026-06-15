@@ -30,6 +30,7 @@ SELECT
   format,
   copy,
   source_link,
+  thumbnail_url,
   -- core engagement counters
   SAFE_CAST(comments AS INT64)         AS comments,
   SAFE_CAST(engagement AS INT64)       AS engagement,

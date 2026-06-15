@@ -45,6 +45,7 @@ SELECT
   campaign_tag,
   source_link,
   copy,
+  thumbnail_url,
   -- cumulative counters (state of the post right now)
   reach,
   views,

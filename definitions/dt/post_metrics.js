@@ -79,6 +79,7 @@ SELECT
   format,
   copy,
   source_link,
+  thumbnail_url,
   REGEXP_EXTRACT(copy, r"#(VISA[A-Z0-9_]+)") AS campaign_tag,
   -- cumulative counters (state at snapshot time)
   comments,

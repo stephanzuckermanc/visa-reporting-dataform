@@ -17,10 +17,9 @@ const dmDataset = datasetFor("dm", "latam"); // 042_visa_latam_dm
 
 publish("dm_sov", {
   schema: dmDataset,
-  type: "table",
+  type: "view",
   description:
-    "Share of Voice largo (date × scope × brand) desde el Sheet VISA|Mentions. scope competitor/sponsor; mentions diarias por marca; share_pct = marca/total del scope por día.",
-  bigquery: { partitionBy: "fecha", clusterBy: ["scope", "brand_key"] },
+    "Share of Voice largo (date × scope × brand) desde el Sheet VISA|Mentions. scope competitor/sponsor; mentions diarias por marca; share_pct = marca/total del scope por día. VISTA: refleja los raw al instante (scheduled query 11-14 MX) sin esperar el run de Dataform.",
 }).query(
   (ctx) => `
 WITH comp AS (

@@ -16,10 +16,9 @@ const dmDataset = datasetFor("dm", "latam"); // 042_visa_latam_dm
 
 publish("dm_listening", {
   schema: dmDataset,
-  type: "table",
+  type: "view",
   description:
-    "Listening diario (Brandwatch) desde el Sheet VISA|Mentions. Grain: fecha. Conteos crudos + % por día; los % de rango se recomputan en Looker sobre los conteos.",
-  bigquery: { partitionBy: "fecha" },
+    "Listening diario (Brandwatch) desde el Sheet VISA|Mentions. Grain: fecha. Conteos crudos + % por día; los % de rango se recomputan en Looker sobre los conteos. VISTA: refleja listening_raw al instante (scheduled query 11-14 MX) sin esperar el run de Dataform.",
 }).query(
   (ctx) => `
 SELECT

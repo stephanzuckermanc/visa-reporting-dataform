@@ -14,10 +14,9 @@ const dmDataset = datasetFor("dm", "latam"); // 042_visa_latam_dm
 
 publish("dm_sentiment", {
   schema: dmDataset,
-  type: "table",
+  type: "view",
   description:
-    "Sentimiento listening largo (fecha × sentiment) desde dm_listening, para el donut/barras de Sentiment en Looker.",
-  bigquery: { partitionBy: "fecha", clusterBy: ["sentiment"] },
+    "Sentimiento listening largo (fecha × sentiment) desde dm_listening, para el donut/barras de Sentiment en Looker. VISTA: refleja dm_listening al instante (scheduled query 11-14 MX) sin esperar el run de Dataform.",
 }).query(
   (ctx) => `
 SELECT

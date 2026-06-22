@@ -163,8 +163,25 @@ colab AS (
   FROM starcom s
   WHERE s.sc_key NOT IN (SELECT sc_key FROM owned_keys)
 )
-SELECT * FROM owned
-UNION ALL
-SELECT * FROM colab
+-- network reformateado a nombre de red bien escrito (no MAYÚSCULAS) en la salida.
+-- Cubre las redes actuales + fallback INITCAP para cualquier red futura.
+SELECT * REPLACE (
+  CASE network
+    WHEN 'INSTAGRAMBUSINESS' THEN 'Instagram'
+    WHEN 'TIKTOKBUSINESS'    THEN 'TikTok'
+    WHEN 'YOUTUBECHANNEL'    THEN 'YouTube'
+    WHEN 'FACEBOOKPAGE'      THEN 'Facebook'
+    WHEN 'TWITTER'           THEN 'X'
+    WHEN 'TWITTERV2'         THEN 'X'
+    WHEN 'LINKEDIN'          THEN 'LinkedIn'
+    WHEN 'LINKEDINCOMPANY'   THEN 'LinkedIn'
+    ELSE INITCAP(network)
+  END AS network
+)
+FROM (
+  SELECT * FROM owned
+  UNION ALL
+  SELECT * FROM colab
+)
 `
 );

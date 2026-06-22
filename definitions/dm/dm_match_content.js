@@ -62,7 +62,9 @@ starcom AS (
   WHERE url LIKE 'http%' AND post_id IS NOT NULL AND TRIM(post_id) != ''
 ),
 spend_owned AS (
-  SELECT sc_key, es_tiktok, MAX(spend) AS spend FROM starcom GROUP BY sc_key, es_tiktok
+  -- spend + el reach de Starcom (el que la pauta compró) para CPM correcto.
+  SELECT sc_key, es_tiktok, MAX(spend) AS spend, MAX(sc_reach) AS spend_reach
+  FROM starcom GROUP BY sc_key, es_tiktok
 ),
 -- keys de Starcom que SÍ matchean un post propio. INNER JOIN permite OR/LIKE en el
 -- ON (el anti-join de NOT EXISTS NO permite LIKE en BigQuery). colab = los que NO
@@ -76,7 +78,7 @@ owned_keys AS (
 ),
 -- ---- A) OWNED: métricas Hootsuite + spend de Starcom ----
 matched_ig AS (
-  SELECT k.tipo_contenido, k.pauta_ig AS pauta, p.*, sp.spend
+  SELECT k.tipo_contenido, k.pauta_ig AS pauta, p.*, sp.spend, sp.spend_reach
   FROM keys k
   JOIN ${ctx.ref({ schema: dmDataset, name: "dm_post_performance" })} p
     ON k.ig_shortcode IS NOT NULL
@@ -86,7 +88,7 @@ matched_ig AS (
    AND p.source_link LIKE CONCAT('%', sp.sc_key, '%')
 ),
 matched_tk AS (
-  SELECT k.tipo_contenido, k.pauta_tiktok AS pauta, p.*, sp.spend
+  SELECT k.tipo_contenido, k.pauta_tiktok AS pauta, p.*, sp.spend, sp.spend_reach
   FROM keys k
   JOIN ${ctx.ref({ schema: dmDataset, name: "dm_post_performance" })} p
     ON k.tiktok_id IS NOT NULL
@@ -159,7 +161,8 @@ colab AS (
     CAST(NULL AS FLOAT64)                      AS total_time_watched,
     CAST(NULL AS FLOAT64)                      AS full_video_watched_rate,
     s.sc_vtr                                   AS vtr_50,
-    s.spend
+    s.spend,
+    s.sc_reach                                 AS spend_reach
   FROM starcom s
   WHERE s.sc_key NOT IN (SELECT sc_key FROM owned_keys)
 )

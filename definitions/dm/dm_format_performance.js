@@ -42,6 +42,7 @@ SELECT
   SUM(views)       AS total_views,
   SUM(engagement)  AS total_engagement
 FROM ${ctx.ref({ schema: dmDataset, name: "dm_match_content" })}
+WHERE COALESCE(tipo_contenido, '') != 'Colaboración'  -- colab/influencer NO suma a KPIs
 GROUP BY network, country, region, market,
          CASE pauta WHEN 'Orgánico' THEN 'organic' WHEN 'Pagado' THEN 'paid' ELSE 'organic' END,
          format, campaign_tag

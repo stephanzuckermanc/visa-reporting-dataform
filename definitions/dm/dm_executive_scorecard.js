@@ -51,6 +51,7 @@ WITH pp AS (
     CASE pauta WHEN 'Orgánico' THEN 'organic' WHEN 'Pagado' THEN 'paid' ELSE 'organic' END AS pauta
   FROM ${ctx.ref({ schema: dmDataset, name: "dm_match_content" })}
   WHERE published_date IS NOT NULL
+    AND COALESCE(tipo_contenido, '') != 'Colaboración'  -- colab/influencer NO suma a KPIs (decisión 2026-06-18)
 ),
 -- GROUPING SETS sobre (market × pauta) con 4 niveles: detalle, rollup de pauta,
 -- rollup de market, y rollup total. IF(GROUPING(...)) arma los labels 'total'.

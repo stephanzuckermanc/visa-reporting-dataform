@@ -66,6 +66,7 @@ WITH agg AS (
     SUM(engagement)          AS engagement
   FROM ${ctx.ref({ schema: dmDataset, name: "dm_match_content" })}
   WHERE published_date IS NOT NULL
+    AND COALESCE(tipo_contenido, '') != 'Colaboración'  -- colab/influencer NO suma a KPIs
   GROUP BY published_date, network, region, COALESCE(market, 'sin_market'),
            CASE pauta WHEN 'Orgánico' THEN 'organic' WHEN 'Pagado' THEN 'paid' ELSE 'organic' END
 ),
